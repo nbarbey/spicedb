@@ -7,7 +7,6 @@ import (
 	"github.com/authzed/spicedb/internal/datastore"
 
 	"github.com/Masterminds/squirrel"
-	"github.com/google/uuid"
 )
 
 const (
@@ -16,6 +15,8 @@ const (
 	informationSchemaTableNameColumn = "table_name"
 
 	analyzeTableQuery = "ANALYZE TABLE %s"
+
+	metadataUniqueIDColumn = "unique_id"
 )
 
 func (mds *Datastore) Statistics(ctx context.Context) (datastore.Stats, error) {
@@ -24,6 +25,16 @@ func (mds *Datastore) Statistics(ctx context.Context) (datastore.Stats, error) {
 		if err != nil {
 			return datastore.Stats{}, fmt.Errorf("unable to run ANALYZE TABLE: %w", err)
 		}
+	}
+
+	idSQL, idArgs, err := sb.Select(metadataUniqueIDColumn).From(mds.driver.Metadata()).ToSql()
+	if err != nil {
+		return datastore.Stats{}, fmt.Errorf("unable to generate query sql: %w", err)
+	}
+
+	var uniqueID string
+	if err := mds.db.QueryRowContext(ctx, idSQL, idArgs...).Scan(&uniqueID); err != nil {
+		return datastore.Stats{}, fmt.Errorf("unable to query unique ID: %w", err)
 	}
 
 	query, args, err := sb.
@@ -48,7 +59,7 @@ func (mds *Datastore) Statistics(ctx context.Context) (datastore.Stats, error) {
 	}
 
 	return datastore.Stats{
-		UniqueID:                   uuid.NewString(), // TODO (@vroldanbet) actually persist a uniqueID in the DB
+		UniqueID:                   uniqueID,
 		ObjectTypeStatistics:       datastore.ComputeObjectTypeStats(nsDefs),
 		EstimatedRelationshipCount: count,
 	}, nil
